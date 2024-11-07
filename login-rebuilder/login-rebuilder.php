@@ -4,7 +4,7 @@ Plugin Name: Login rebuilder
 Plugin URI: https://elearn.jp/wpman/column/login-rebuilder.html
 Description: This plugin will create a new login page for your site. The new login page can be placed in any directory. You can also create separate login pages for administrators and for other users.
 Author: tmatsuur
-Version: 2.8.5
+Version: 2.8.6
 Author URI: https://12net.jp/
 Text Domain: login-rebuilder
 Domain Path: /languages
@@ -19,7 +19,7 @@ namespace jp12net;
 
 define( 'LOGIN_REBUILDER_DOMAIN', 'login-rebuilder' );
 define( 'LOGIN_REBUILDER_DB_VERSION_NAME', 'login-rebuilder-db-version' );
-define( 'LOGIN_REBUILDER_DB_VERSION', '2.8.3' );
+define( 'LOGIN_REBUILDER_DB_VERSION', '2.8.6' );
 define( 'LOGIN_REBUILDER_PROPERTIES', 'login-rebuilder' );
 define( 'LOGIN_REBUILDER_LOGGING_NAME', 'login-rebuilder-logging' );
 define( 'LOGIN_REBUILDER_LOGIN_IP_NAME', 'login-rebuilder-login-ip' );
@@ -116,11 +116,11 @@ require_once './wp-login.php';
 
 		if ( ! empty( $_SERVER['HTTP_CLIENT_IP'] ) ) {
 			$remote_addr = $_SERVER['HTTP_CLIENT_IP'];
-		} else if ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
+		} elseif ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
 			$ip_array = explode( ',', $_SERVER['HTTP_X_FORWARDED_FOR'] );
 			$remote_addr = $ip_array[0];
 		} else {
-			$remote_addr = $_SERVER['REMOTE_ADDR'];
+			$remote_addr = isset( $_SERVER['REMOTE_ADDR'] ) ? $_SERVER['REMOTE_ADDR'] : self::INVALID_REMOTE_ADDR;	// [2.8.6] $_SERVER['REMOTE_ADDR'] not exist.
 		}
 		$this->remote_addr = preg_match( '/^(([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]).){3,5}([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$/', $remote_addr )? $remote_addr: self::INVALID_REMOTE_ADDR;
 		$this->request_uri = $this->_sanitize_url( $_SERVER['REQUEST_URI'] );
@@ -131,8 +131,10 @@ require_once './wp-login.php';
 			$this->host_name = $_SERVER['HTTP_HOST'];
 		} elseif ( isset( $_SERVER['SERVER_NAME'] ) ) {
 			$this->host_name = $_SERVER['SERVER_NAME'];
-		} else {
+		} elseif ( isset( $_SERVER['SERVER_ADDR'] ) ) { // [2.8.6] $_SERVER['SERVER_ADDR'] exists.
 			$this->host_name = gethostbyaddr( $_SERVER['SERVER_ADDR'] );
+		} else { // [2.8.6] $_SERVER['SERVER_ADDR'] not exist.
+			$this->host_name = parse_url( get_site_url(), PHP_URL_HOST );
 		}
 
 		$this->root_url = ( ( is_ssl() || force_ssl_admin() )? "https://": "http://" ) . $this->host_name;

@@ -4,8 +4,8 @@ Donate link: https://elearn.jp/wpman/column/login-rebuilder.html
 Tags: login secure security
 Requires at least: 3.2.0
 Requires PHP: 5.6
-Tested up to: 6.6.1
-Stable tag: 2.8.5
+Tested up to: 6.7.0
+Stable tag: 2.8.6
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -93,6 +93,9 @@ Yes, this plugin works well on Nginx.
 7. Widget to display currently logged in users.
 
 == Changelog ==
+
+= 2.8.6 =
+* Bug fix: Adjusted what is applied to internally stored hostnames when SERVER['SERVER_ADDR'] does not exist.
 
 = 2.8.5 =
 * Bug fix: Adjusted what is applied to internally stored hostnames when SERVER['HTTP_HOST'] does not exist.
