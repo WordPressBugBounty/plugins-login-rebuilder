@@ -4,14 +4,14 @@ Plugin Name: Login rebuilder
 Plugin URI: https://elearn.jp/wpman/column/login-rebuilder.html
 Description: This plugin will create a new login page for your site. The new login page can be placed in any directory. You can also create separate login pages for administrators and for other users.
 Author: tmatsuur
-Version: 2.8.6
+Version: 2.8.7
 Author URI: https://12net.jp/
 Text Domain: login-rebuilder
 Domain Path: /languages
 */
 
 /*
- Copyright (C) 2013-2024 tmatsuur (Email: takenori dot matsuura at 12net dot jp)
+ Copyright (C) 2013-2025 tmatsuur (Email: takenori dot matsuura at 12net dot jp)
 This program is licensed under the GNU GPL Version 2.
 */
 
@@ -19,7 +19,7 @@ namespace jp12net;
 
 define( 'LOGIN_REBUILDER_DOMAIN', 'login-rebuilder' );
 define( 'LOGIN_REBUILDER_DB_VERSION_NAME', 'login-rebuilder-db-version' );
-define( 'LOGIN_REBUILDER_DB_VERSION', '2.8.6' );
+define( 'LOGIN_REBUILDER_DB_VERSION', '2.8.7' );
 define( 'LOGIN_REBUILDER_PROPERTIES', 'login-rebuilder' );
 define( 'LOGIN_REBUILDER_LOGGING_NAME', 'login-rebuilder-logging' );
 define( 'LOGIN_REBUILDER_LOGIN_IP_NAME', 'login-rebuilder-login-ip' );
@@ -102,6 +102,7 @@ require_once './wp-login.php';
 
 	private $arrow_slash_in_login_path = true;	// [2.6.2]
 	private $interim_login; // [2.9.0]
+	private $password_reset_user = null; // [2.8.7]
 
 	/**
 	 * Construction.
@@ -111,128 +112,134 @@ require_once './wp-login.php';
 	 * @global $_SERVER.
 	 */
 	public function __construct() {
-		register_activation_hook( __FILE__ , array( &$this , 'activation' ) );
-		register_deactivation_hook( __FILE__ , array( &$this , 'deactivation' ) );
+		if ( ! defined( 'LOGIN_REBUILDER_LOADED' ) ) {
+			register_activation_hook( __FILE__ , array( &$this , 'activation' ) );
+			register_deactivation_hook( __FILE__ , array( &$this , 'deactivation' ) );
 
-		if ( ! empty( $_SERVER['HTTP_CLIENT_IP'] ) ) {
-			$remote_addr = $_SERVER['HTTP_CLIENT_IP'];
-		} elseif ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
-			$ip_array = explode( ',', $_SERVER['HTTP_X_FORWARDED_FOR'] );
-			$remote_addr = $ip_array[0];
-		} else {
-			$remote_addr = isset( $_SERVER['REMOTE_ADDR'] ) ? $_SERVER['REMOTE_ADDR'] : self::INVALID_REMOTE_ADDR;	// [2.8.6] $_SERVER['REMOTE_ADDR'] not exist.
-		}
-		$this->remote_addr = preg_match( '/^(([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]).){3,5}([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$/', $remote_addr )? $remote_addr: self::INVALID_REMOTE_ADDR;
-		$this->request_uri = $this->_sanitize_url( $_SERVER['REQUEST_URI'] );
-		$this->user_agent = isset( $_SERVER['HTTP_USER_AGENT'] )? wp_specialchars_decode( $_SERVER['HTTP_USER_AGENT'], ENT_QUOTES ): 'None';
-
-		// [2.8.5][2.8.3][2.6.2] $_SERVER['SERVER_NAME'] was wrong.
-		if ( isset( $_SERVER['HTTP_HOST'] ) ) {
-			$this->host_name = $_SERVER['HTTP_HOST'];
-		} elseif ( isset( $_SERVER['SERVER_NAME'] ) ) {
-			$this->host_name = $_SERVER['SERVER_NAME'];
-		} elseif ( isset( $_SERVER['SERVER_ADDR'] ) ) { // [2.8.6] $_SERVER['SERVER_ADDR'] exists.
-			$this->host_name = gethostbyaddr( $_SERVER['SERVER_ADDR'] );
-		} else { // [2.8.6] $_SERVER['SERVER_ADDR'] not exist.
-			$this->host_name = parse_url( get_site_url(), PHP_URL_HOST );
-		}
-
-		$this->root_url = ( ( is_ssl() || force_ssl_admin() )? "https://": "http://" ) . $this->host_name;
-		$this->root_path = $_SERVER['DOCUMENT_ROOT'];
-		if ( empty( $this->root_path ) ) {
-			list( $scheme, $content_uri ) = explode( "://" . $this->host_name, get_option( 'siteurl' ) );
-			$this->root_path = preg_replace( '/'.str_replace( array( '-', '.', '/' ), array( '\\-', '\\.', '[\\/\\\\]' ), $content_uri ).'/u', '', untrailingslashit( ABSPATH ) );
-		}
-
-		$this->interim_login = isset( $GLOBALS['interim_login'] ) && $GLOBALS['interim_login'];
-
-		if ( is_multisite() && ! is_main_site( get_current_blog_id() ) ) {
-			// [2.4.4] bugfix: installed in subdirectory
-			$this->use_site_option = false;
-
-			if ( ! is_subdomain_install() ) {	// [2.6.2]
-				$this->arrow_slash_in_login_path = false;
+			if ( ! empty( $_SERVER['HTTP_CLIENT_IP'] ) ) {
+				$remote_addr = $_SERVER['HTTP_CLIENT_IP'];
+			} elseif ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
+				$ip_array = explode( ',', $_SERVER['HTTP_X_FORWARDED_FOR'] );
+				$remote_addr = $ip_array[0];
+			} else {
+				$remote_addr = isset( $_SERVER['REMOTE_ADDR'] ) ? $_SERVER['REMOTE_ADDR'] : self::INVALID_REMOTE_ADDR;	// [2.8.6] $_SERVER['REMOTE_ADDR'] not exist.
 			}
-		}
+			$this->remote_addr = preg_match( '/^(([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]).){3,5}([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$/', $remote_addr )? $remote_addr: self::INVALID_REMOTE_ADDR;
+			$this->request_uri = $this->_sanitize_url( $_SERVER['REQUEST_URI'] );
+			$this->user_agent = isset( $_SERVER['HTTP_USER_AGENT'] )? wp_specialchars_decode( $_SERVER['HTTP_USER_AGENT'], ENT_QUOTES ): 'None';
 
-		$this->_load_option();
-		if ( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_WORKING &&
-			( !@file_exists( $this->_login_file_path( $this->properties['page'] ) ) || !$this->_is_valid_new_login_file() ) ) {
-			$this->properties['status'] = self::LOGIN_REBUILDER_STATUS_IN_PREPARATION;
-		}
+			// [2.8.5][2.8.3][2.6.2] $_SERVER['SERVER_NAME'] was wrong.
+			if ( isset( $_SERVER['HTTP_HOST'] ) ) {
+				$this->host_name = $_SERVER['HTTP_HOST'];
+			} elseif ( isset( $_SERVER['SERVER_NAME'] ) ) {
+				$this->host_name = $_SERVER['SERVER_NAME'];
+			} elseif ( isset( $_SERVER['SERVER_ADDR'] ) ) { // [2.8.6] $_SERVER['SERVER_ADDR'] exists.
+				$this->host_name = gethostbyaddr( $_SERVER['SERVER_ADDR'] );
+			} else { // [2.8.6] $_SERVER['SERVER_ADDR'] not exist.
+				$this->host_name = parse_url( get_site_url(), PHP_URL_HOST );
+			}
 
-		add_action( 'admin_menu', array( &$this, 'admin_menu' ) );
-		add_action( 'admin_init', array( &$this, 'admin_init' ) );
-		add_action( 'admin_enqueue_scripts', array( &$this, 'admin_enqueue_scripts' ) );
+			$this->root_url = ( ( is_ssl() || force_ssl_admin() )? "https://": "http://" ) . $this->host_name;
+			$this->root_path = $_SERVER['DOCUMENT_ROOT'];
+			if ( empty( $this->root_path ) ) {
+				list( $scheme, $content_uri ) = explode( "://" . $this->host_name, get_option( 'siteurl' ) );
+				$this->root_path = preg_replace( '/'.str_replace( array( '-', '.', '/' ), array( '\\-', '\\.', '[\\/\\\\]' ), $content_uri ).'/u', '', untrailingslashit( ABSPATH ) );
+			}
 
-		add_action( 'wp_ajax_login_rebuilder_try_save', array( &$this, 'try_save' ) );
-		add_action( 'wp_ajax_login_rebuilder_lock_exists', array( &$this, 'lock_exists' ) );
-		add_action( 'wp_ajax_login_rebuilder_download_log', array( &$this, 'download_log' ) );
-		add_action( 'wp_ajax_' . self::AJAX_LOGGED_IN_USERS, array( &$this, 'logged_in_users' ) );
+			$this->interim_login = isset( $GLOBALS['interim_login'] ) && $GLOBALS['interim_login'];
 
-		add_filter( 'plugin_row_meta', array( &$this, 'plugin_row_meta' ), 9, 4 );	// [2.0.0] Changed to 4 from 2 the number of parameters.
-		add_filter( 'site_url', array( &$this, 'site_url' ), 10, 4 );
-		add_filter( 'network_site_url', array( &$this, 'network_site_url' ), 10, 3 );
-		add_filter( 'wp_redirect', array( &$this, 'wp_redirect' ), 10, 2 );
+			if ( is_multisite() && ! is_main_site( get_current_blog_id() ) ) {
+				// [2.4.4] bugfix: installed in subdirectory
+				$this->use_site_option = false;
 
-		if ( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_WORKING ) {
-			add_action( 'login_init', array( &$this, 'login_init' ) );
-			if ( self::HTTP_AUTHENTICATE_ENABLED ) {
-				if ( $this->properties['use_http_auth'] &&
-					! empty( $this->properties['http_auth_username'] ) &&
-					! empty( $this->properties['http_auth_hash'] ) &&
-					( ! $this->interim_login || $this->properties['http_auth_popup'] ) ) {	// [2.9.0]
-					add_action( 'login_init', array( &$this, 'http_auth_to_login' ), 1 );
+				if ( ! is_subdomain_install() ) {	// [2.6.2]
+					$this->arrow_slash_in_login_path = false;
 				}
 			}
 
-			add_action( 'set_logged_in_cookie', array( &$this, 'set_logged_in_cookie' ), 10, $this->_is_wp_version( '4.9', '>=' )? 6: 5 );	// [2.8.0] Changed this process from 'login_redirect' action to 'set_logged_in_cookie' action.
-			if ( $this->properties['logging'] == self::LOGIN_REBUILDER_LOGGING_ALL ||
-				$this->properties['logging'] == self::LOGIN_REBUILDER_LOGGING_LOGIN ) {
-				add_action( 'wp_login_failed', array( &$this, 'wp_login_failed' ), 10, 1 );
+			$this->_load_option();
+			if ( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_WORKING &&
+				( !@file_exists( $this->_login_file_path( $this->properties['page'] ) ) || !$this->_is_valid_new_login_file() ) ) {
+				$this->properties['status'] = self::LOGIN_REBUILDER_STATUS_IN_PREPARATION;
 			}
-			add_filter( 'authenticate', array( &$this, 'role_authenticate' ), self::PRIORITY_ROLE_AUTHENTICATE, 3 );
-			if ( isset( $this->properties['ambiguous_error_message'] ) && $this->properties['ambiguous_error_message'] ) {	// [2.1.0]
-				add_filter( 'authenticate', array( &$this, 'ambiguous_error_message' ), self::PRIORITY_AMBIGUOUS_ERROR_MESSAGE, 3 );
-			}
-			if ( isset( $this->properties['disable_authenticate_email_password'] ) && $this->properties['disable_authenticate_email_password'] &&
-				function_exists( 'wp_authenticate_email_password' ) )	{ // [2.1.0]
-				remove_filter( 'authenticate', 'wp_authenticate_email_password', 20 );
-			}
-			if ( isset( $this->properties['access_author_page'] ) &&
-				$this->properties['access_author_page'] == self::LOGIN_REBUILDER_ACCESS_AUTHOR_PAGE_404 ) {	// [2.4.0]
-				add_filter( 'redirect_canonical', array( &$this, 'author_page_canonical' ), 10, 2 );
-				add_action( 'template_redirect', array( &$this, 'author_page_404' ) );
-				add_filter( 'wp_sitemaps_add_provider', array( &$this, 'sitemaps_suppress_users' ), 10, 2 ); // [2.6.7]
-			}
-			if ( isset( $this->properties['oembed'] ) &&
-				$this->properties['oembed'] != self::LOGIN_REBUILDER_OEMBED_DEFAULT ) {	// [2.4.1]
-				add_filter( 'oembed_response_data',	array( &$this, 'oembed_hide_author_data' ), 10, 4 );	// hide author name and url
-				if ( $this->properties['oembed'] == self::LOGIN_REBUILDER_OEMBED_DONT_OUTPUT ) {
-					remove_action( 'wp_head', 'wp_oembed_add_discovery_links' );							// Don't output links
-					add_filter( 'rest_pre_dispatch', array( &$this, 'disable_oembed_request' ), 10, 3 );	// disable oembed request
+
+			add_action( 'admin_menu', array( &$this, 'admin_menu' ) );
+			add_action( 'admin_init', array( &$this, 'admin_init' ) );
+			add_action( 'admin_enqueue_scripts', array( &$this, 'admin_enqueue_scripts' ) );
+
+			add_action( 'wp_ajax_login_rebuilder_try_save', array( &$this, 'try_save' ) );
+			add_action( 'wp_ajax_login_rebuilder_lock_exists', array( &$this, 'lock_exists' ) );
+			add_action( 'wp_ajax_login_rebuilder_download_log', array( &$this, 'download_log' ) );
+			add_action( 'wp_ajax_' . self::AJAX_LOGGED_IN_USERS, array( &$this, 'logged_in_users' ) );
+
+			add_filter( 'plugin_row_meta', array( &$this, 'plugin_row_meta' ), 9, 4 );	// [2.0.0] Changed to 4 from 2 the number of parameters.
+			add_filter( 'site_url', array( &$this, 'site_url' ), 10, 4 );
+			add_filter( 'network_site_url', array( &$this, 'network_site_url' ), 10, 3 );
+			add_filter( 'wp_redirect', array( &$this, 'wp_redirect' ), 10, 2 );
+			add_action( 'allow_password_reset', array( $this, 'allow_password_reset' ), 1, 2 );	// [2.8.7]
+			add_action( 'validate_password_reset', array( $this, 'validate_password_reset' ), 1, 2 );	// [2.8.7]
+
+			if ( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_WORKING ) {
+				add_action( 'login_init', array( &$this, 'login_init' ) );
+				if ( self::HTTP_AUTHENTICATE_ENABLED ) {
+					if ( $this->properties['use_http_auth'] &&
+						! empty( $this->properties['http_auth_username'] ) &&
+						! empty( $this->properties['http_auth_hash'] ) &&
+						( ! $this->interim_login || $this->properties['http_auth_popup'] ) ) {	// [2.9.0]
+						add_action( 'login_init', array( &$this, 'http_auth_to_login' ), 1 );
+					}
 				}
-			}
-			add_filter( 'user_request_action_email_content', array( &$this, 'set_original_confirmaction_url' ), 10, 2 );	// [2.4.2]
 
-			if ( isset( $this->properties['locked_status_popup'] ) && $this->properties['locked_status_popup'] ) {	// [2.5.0]
-				add_filter( 'login_errors', array( &$this, 'login_locked_status' ), 10, 1 );
-				add_filter( 'login_messages', array( &$this, 'login_locked_status' ), 10, 1 );
-			}
-			add_filter( 'determine_locale', array( &$this, 'determined_locale' ), 10, 1 );	// [2.5.0]
+				add_action( 'set_logged_in_cookie', array( &$this, 'set_logged_in_cookie' ), 10, $this->_is_wp_version( '4.9', '>=' )? 6: 5 );	// [2.8.0] Changed this process from 'login_redirect' action to 'set_logged_in_cookie' action.
+				if ( $this->properties['logging'] == self::LOGIN_REBUILDER_LOGGING_ALL ||
+					$this->properties['logging'] == self::LOGIN_REBUILDER_LOGGING_LOGIN ) {
+					add_action( 'wp_login_failed', array( &$this, 'wp_login_failed' ), 10, 1 );
+				}
+				add_filter( 'authenticate', array( &$this, 'role_authenticate' ), self::PRIORITY_ROLE_AUTHENTICATE, 3 );
+				if ( isset( $this->properties['ambiguous_error_message'] ) && $this->properties['ambiguous_error_message'] ) {	// [2.1.0]
+					add_filter( 'authenticate', array( &$this, 'ambiguous_error_message' ), self::PRIORITY_AMBIGUOUS_ERROR_MESSAGE, 3 );
+				}
+				if ( isset( $this->properties['disable_authenticate_email_password'] ) && $this->properties['disable_authenticate_email_password'] &&
+					function_exists( 'wp_authenticate_email_password' ) )	{ // [2.1.0]
+					remove_filter( 'authenticate', 'wp_authenticate_email_password', 20 );
+				}
+				if ( isset( $this->properties['access_author_page'] ) &&
+					$this->properties['access_author_page'] == self::LOGIN_REBUILDER_ACCESS_AUTHOR_PAGE_404 ) {	// [2.4.0]
+					add_filter( 'redirect_canonical', array( &$this, 'author_page_canonical' ), 10, 2 );
+					add_action( 'template_redirect', array( &$this, 'author_page_404' ) );
+					add_filter( 'wp_sitemaps_add_provider', array( &$this, 'sitemaps_suppress_users' ), 10, 2 ); // [2.6.7]
+				}
+				if ( isset( $this->properties['oembed'] ) &&
+					$this->properties['oembed'] != self::LOGIN_REBUILDER_OEMBED_DEFAULT ) {	// [2.4.1]
+					add_filter( 'oembed_response_data',	array( &$this, 'oembed_hide_author_data' ), 10, 4 );	// hide author name and url
+					if ( $this->properties['oembed'] == self::LOGIN_REBUILDER_OEMBED_DONT_OUTPUT ) {
+						remove_action( 'wp_head', 'wp_oembed_add_discovery_links' );							// Don't output links
+						add_filter( 'rest_pre_dispatch', array( &$this, 'disable_oembed_request' ), 10, 3 );	// disable oembed request
+					}
+				}
+				add_filter( 'user_request_action_email_content', array( &$this, 'set_original_confirmaction_url' ), 10, 2 );	// [2.4.2]
 
-			if ( isset( $this->properties['restrict_rest_users'] ) && $this->properties['restrict_rest_users'] ) {	// [2.6.0]
-				add_filter( 'rest_pre_dispatch', array( &$this, 'rest_pre_dispatch' ), 8, 3 );
+				if ( isset( $this->properties['locked_status_popup'] ) && $this->properties['locked_status_popup'] ) {	// [2.5.0]
+					add_filter( 'login_errors', array( &$this, 'login_locked_status' ), 10, 1 );
+					add_filter( 'login_messages', array( &$this, 'login_locked_status' ), 10, 1 );
+				}
+				add_filter( 'determine_locale', array( &$this, 'determined_locale' ), 10, 1 );	// [2.5.0]
+
+				if ( isset( $this->properties['restrict_rest_users'] ) && $this->properties['restrict_rest_users'] ) {	// [2.6.0]
+					add_filter( 'rest_pre_dispatch', array( &$this, 'rest_pre_dispatch' ), 8, 3 );
+				}
+
+				if ( $this->_is_wp_version( '4.7.4', '>=' ) ) {	// [2.6.2]
+					add_filter( 'send_auth_cookies', array( &$this, 'send_auth_cookies' ), 10000, 1 );
+				}
+
+				// [2.7.1]
+			}
+			if ( $this->_is_wp_version( '3.5', '>=' ) ) {
+				$this->_xmlrpc_actions();
 			}
 
-			if ( $this->_is_wp_version( '4.7.4', '>=' ) ) {	// [2.6.2]
-				add_filter( 'send_auth_cookies', array( &$this, 'send_auth_cookies' ), 10000, 1 );
-			}
-
-			// [2.7.1]
-		}
-		if ( $this->_is_wp_version( '3.5', '>=' ) ) {
-			$this->_xmlrpc_actions();
+			define( 'LOGIN_REBUILDER_LOADED', time() );	// [2.8.7]
 		}
 	}
 	/**
@@ -281,7 +288,7 @@ require_once './wp-login.php';
 	 */
 	public function login_init() {
 		if ( $this->_is_wp_version( '4.9.6', '>=' ) && isset( $_GET['action'] ) && $_GET['action'] == 'confirmaction' ) return;		// [2.4.2] User request confirm
-		if ( isset( $_GET['action'] ) && $_GET['action'] == 'postpass' ) return;				// Password reset
+		if ( isset( $_GET['action'] ) && in_array( $_GET['action'], array( 'postpass', 'resetpass', 'rp' ) ) ) return;				// Password reset [2.8.7] Added 'resetpass' and 'rp'
 		if ( get_option( 'users_can_register' ) && !$this->properties['reject_user_register'] &&
 			( ( isset( $_GET['action'] ) && $_GET['action'] == 'register' ) ||
 			( isset( $_GET['checkemail'] ) && $_GET['checkemail'] == 'registered' ) ) ) return;	// [2.2.0] User registration
@@ -752,22 +759,96 @@ var intervalId_looged_in_users = setInterval( function () {
 	 * @return string     Site url link.
 	 */
 	public function site_url( $url, $path, $orig_scheme, $blog_id ) {
+		if ( 'site_url' !== current_filter() ) {
+			return $url;
+		}
 		if ( $this->properties['status'] == self::LOGIN_REBUILDER_STATUS_WORKING ) {
 			$my_login_page = $this->properties['page'];
-			if ( function_exists( 'wp_get_current_user' ) )
+			if ( function_exists( 'wp_get_current_user' ) ) {
 				$user = wp_get_current_user();
-			else
+			} else { 
 				$user = (object)array( 'data'=>null );
+			}
 			if ( isset( $this->properties['page_subscriber'] ) && $this->properties['page_subscriber'] != '' &&
-				( $this->_in_url( $this->request_uri, $this->properties['page_subscriber'] ) || ( isset( $user->data ) && $this->_is_secondary_login_user( $user ) ) ) )
+				( $this->_in_url( $this->request_uri, $this->properties['page_subscriber'] ) || ( isset( $user->data ) && $this->_is_secondary_login_user( $user ) ) ) ) {
 				$my_login_page = $this->properties['page_subscriber'];
+			}
 
-			if ( $this->_is_login_path( $path ) &&
-				( $this->_is_user_logged_in() || $this->_in_url( $this->request_uri, $my_login_page ) ) ) {
-				$url = $this->_rewrite_login_url( 'wp-login.php', $my_login_page, $url );
+			if ( $this->_is_login_path( $path ) ) {
+				if ( $this->_is_user_logged_in() || $this->_in_url( $this->request_uri, $my_login_page ) ) {
+					$url = $this->_rewrite_login_url( 'wp-login.php', $my_login_page, $url );
+				} elseif ( $this->_is_requested_password_reset() && $this->password_reset_user ) {	// [2.8.7]
+					if ( ! isset( $this->properties['page_subscriber'] ) || empty( $this->properties['page_subscriber'] ) ||
+						$this->_is_not_secondary_login_user( $this->password_reset_user ) ) {
+						$url = $this->_rewrite_login_url( 'wp-login.php', $this->properties['page'], $url );
+					} elseif ( isset( $this->properties['page_subscriber'] ) && ! empty( $this->properties['page_subscriber'] ) &&
+						$this->_is_secondary_login_user( $this->password_reset_user ) ) {
+						$url = $this->_rewrite_login_url( 'wp-login.php', $this->properties['page_subscriber'], $url );
+					}
+				}
 			}
 		}
 		return $url;
+	}
+
+	/**
+	 * Check if the requested URL is a password reset.
+	 * 
+	 * @since 2.8.7
+	 */
+	private function _is_requested_password_reset() {
+		return preg_match( '/\/wp\-login\.php/u', $this->request_uri ) &&
+			( did_action( 'login_form_rp' ) || did_action( 'login_form_resetpass' ) ) &&
+			1 === did_filter( 'password_reset_expiration' );
+	}
+
+	/**
+	 * Check whether the user corresponds to the URL for password reset.
+	 * 
+	 * @since 2.8.7
+	 * 
+	 * @see allow_password_reset filter. 
+	 * 
+	 * @param bool $allow   Whether to allow the password to be reset. Default true.
+	 * @param int  $user_id The ID of the user attempting to reset a password.
+	 * @return bool
+	 */
+	public function allow_password_reset( $allow, $user_id ) {
+		if ( 'allow_password_reset' === current_filter() && $allow && $user_id ) {
+			$allow = false;
+			$user = get_user_by( 'id', $user_id );
+			if ( isset( $this->properties['page_subscriber'] ) &&
+				! empty( $this->properties['page_subscriber'] ) &&
+				$this->_in_url( $this->request_uri, $this->properties['page_subscriber'] ) &&
+				$this->_is_secondary_login_user( $user ) ) {
+				$this->password_reset_user = $user;
+				$allow = true;
+			} elseif ( $this->_in_url( $this->request_uri, $this->properties['page'] ) &&
+				$this->_is_not_secondary_login_user( $user ) ) {
+				$this->password_reset_user = $user;
+				$allow = true;
+			}
+		}
+		return $allow;
+	}
+
+	/**
+	 * Retain user with reset password.
+	 * 
+	 * @since 2.8.7
+	 * 
+	 * @see validate_password_reset action.
+	 * 
+	 * @param WP_Error $errors
+	 * @param WP_User|WP_Error $user
+	 */
+	public function validate_password_reset( $errors, $user ) {
+		if ( 'validate_password_reset' === current_action() &&
+			! $errors->has_errors() &&
+			isset( $_POST['pass1'] ) && ! empty( $_POST['pass1'] ) &&
+			$user && ! is_wp_error( $user ) ) {
+			$this->password_reset_user = $user;
+		}
 	}
 
 	/**
@@ -3372,7 +3453,7 @@ document.querySelector( '#rest-log-notice .dashicons-editor-break' ).addEventLis
 	 */
 	public function disable_oembed_request( $response, $server, $request ) {
 		if ( 0 === strpos( $request->get_route(), '/oembed/' ) ) {
-			return new WP_Error( 'oembed request has disabled', __( 'This REST API has been disabled.', LOGIN_REBUILDER_DOMAIN ) );
+			return new \WP_Error( 'oembed request has disabled', __( 'This REST API has been disabled.', LOGIN_REBUILDER_DOMAIN ) );
 		}
 		return $response;
 	}
@@ -3539,7 +3620,7 @@ document.querySelector( '#rest-log-notice .dashicons-editor-break' ).addEventLis
 					)
 				);
 			}
-			return new WP_Error(
+			return new \WP_Error(
 				'rest_forbidden',
 				__( 'Sorry, you are not allowed to this requests.', LOGIN_REBUILDER_DOMAIN ),
 				array( 'status' => rest_authorization_required_code() )
