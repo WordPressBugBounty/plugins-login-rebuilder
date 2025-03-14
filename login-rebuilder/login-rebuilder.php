@@ -4,7 +4,7 @@ Plugin Name: Login rebuilder
 Plugin URI: https://elearn.jp/wpman/column/login-rebuilder.html
 Description: This plugin will create a new login page for your site. The new login page can be placed in any directory. You can also create separate login pages for administrators and for other users.
 Author: tmatsuur
-Version: 2.8.7
+Version: 2.8.8
 Author URI: https://12net.jp/
 Text Domain: login-rebuilder
 Domain Path: /languages
@@ -19,7 +19,7 @@ namespace jp12net;
 
 define( 'LOGIN_REBUILDER_DOMAIN', 'login-rebuilder' );
 define( 'LOGIN_REBUILDER_DB_VERSION_NAME', 'login-rebuilder-db-version' );
-define( 'LOGIN_REBUILDER_DB_VERSION', '2.8.7' );
+define( 'LOGIN_REBUILDER_DB_VERSION', '2.8.8' );
 define( 'LOGIN_REBUILDER_PROPERTIES', 'login-rebuilder' );
 define( 'LOGIN_REBUILDER_LOGGING_NAME', 'login-rebuilder-logging' );
 define( 'LOGIN_REBUILDER_LOGIN_IP_NAME', 'login-rebuilder-login-ip' );
@@ -815,18 +815,21 @@ var intervalId_looged_in_users = setInterval( function () {
 	 */
 	public function allow_password_reset( $allow, $user_id ) {
 		if ( 'allow_password_reset' === current_filter() && $allow && $user_id ) {
-			$allow = false;
 			$user = get_user_by( 'id', $user_id );
 			if ( isset( $this->properties['page_subscriber'] ) &&
 				! empty( $this->properties['page_subscriber'] ) &&
-				$this->_in_url( $this->request_uri, $this->properties['page_subscriber'] ) &&
-				$this->_is_secondary_login_user( $user ) ) {
-				$this->password_reset_user = $user;
-				$allow = true;
-			} elseif ( $this->_in_url( $this->request_uri, $this->properties['page'] ) &&
-				$this->_is_not_secondary_login_user( $user ) ) {
-				$this->password_reset_user = $user;
-				$allow = true;
+				$this->_in_url( $this->request_uri, $this->properties['page_subscriber'] ) ) {
+				if ( $this->_is_secondary_login_user( $user ) ) {
+					$this->password_reset_user = $user;
+				} else {
+					$allow = false;
+				}
+			} elseif ( $this->_in_url( $this->request_uri, $this->properties['page'] ) ) {
+				if ( $this->_is_not_secondary_login_user( $user ) ) {
+					$this->password_reset_user = $user;
+				} else {
+					$allow = false;
+				}
 			}
 		}
 		return $allow;

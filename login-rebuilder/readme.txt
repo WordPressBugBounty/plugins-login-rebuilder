@@ -5,7 +5,7 @@ Tags: login secure security
 Requires at least: 3.2.0
 Requires PHP: 5.6
 Tested up to: 6.7.2
-Stable tag: 2.8.7
+Stable tag: 2.8.8
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -93,6 +93,9 @@ Yes, this plugin works well on Nginx.
 7. Widget to display currently logged in users.
 
 == Changelog ==
+
+= 2.8.8 =
+* Bug fix: Fixed an issue where the reset permission check was incorrectly changed on pages other than the alternative login page.
 
 = 2.8.7 =
 * Bug fix: The issue has been fixed, and the password can now be reset.
