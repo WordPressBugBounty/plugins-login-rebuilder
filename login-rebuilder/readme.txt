@@ -4,7 +4,7 @@ Donate link: https://elearn.jp/wpman/column/login-rebuilder.html
 Tags: login secure security
 Requires at least: 3.2.0
 Requires PHP: 5.6
-Tested up to: 6.7.2
+Tested up to: 6.9.0
 Stable tag: 2.8.8
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
